@@ -184,11 +184,9 @@ def build_game_state(player_hand, player_field, player_gy,
         },
         "opponent": {
             "life_points": opp_lp,
-            # Opponent hand: count + hidden placeholders — LLM knows how many
-            # cards they hold but not what they are
             "hand_count":  len(opp_hand.cards),
-            "hand":        [{"name": "???", "id": None, "in_hand": True}
-                            for _ in opp_hand.cards],
+            # CHANGED: Now fully outputs the actual card data instead of "???"
+            "hand":        [card_to_state(c) for c in opp_hand.cards], 
             "field":       [card_to_state(c, hide_if_set=True) for c in opp_field],
             "graveyard":   [card_to_state(c) for c in opp_gy.cards],
             "deck_count":  o_deck_count,
