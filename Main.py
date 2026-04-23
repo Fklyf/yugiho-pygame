@@ -11,6 +11,8 @@ from config import (
     SNAP_RADIUS,
     PLAYER_HAND_Y_THRESHOLD,
     OPPONENT_HAND_Y_THRESHOLD,
+    PLAYER_DECK_PATH,
+    OPPONENT_DECK_PATH,
 )
 from engine.card import Card
 from engine.field import draw_field_zones
@@ -237,7 +239,18 @@ def run_game():
     small_font = pygame.font.SysFont("Arial", 14)
 
     cx, cy = SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] // 2
-    folder = "assets/Deck_Yugi"
+
+    try:
+        with open(f"{PLAYER_DECK_PATH}/metadata.json", encoding="utf-8") as f:
+            raw_p = json.load(f)
+            p_data = raw_p["data"] if isinstance(raw_p, dict) and "data" in raw_p else raw_p
+        player_deck = list(p_data)
+        random.shuffle(player_deck)
+        
+        # Do the same for the opponent using OPPONENT_DECK_PATH
+    except Exception as e:
+        print(f"Deck load error: {e}")
+        return
 
     # Card back
     bp = "assets/card_back.png"
@@ -246,17 +259,28 @@ def run_game():
     if not os.path.exists(bp):
         back_img.fill((50, 50, 50))
 
-    # Deck
+    # --- Load Decks ---
     try:
-        with open(f"{folder}/metadata.json") as f:
-            raw = json.load(f)
-            deck_data = raw["data"] if isinstance(raw, dict) and "data" in raw else raw
+        # Load Player Deck (using utf-8 to prevent charmap errors)
+        with open(f"{PLAYER_DECK_PATH}/metadata.json", encoding="utf-8") as f:
+            raw_p = json.load(f)
+            p_data = raw_p["data"] if isinstance(raw_p, dict) and "data" in raw_p else raw_p
+        
+        # Load Opponent Deck
+        with open(f"{OPPONENT_DECK_PATH}/metadata.json", encoding="utf-8") as f:
+            raw_o = json.load(f)
+            o_data = raw_o["data"] if isinstance(raw_o, dict) and "data" in raw_o else raw_o
+
     except Exception as e:
         print(f"Deck load error: {e}")
         return
 
-    player_deck = list(deck_data);  random.shuffle(player_deck)
-    opp_deck    = list(deck_data);  random.shuffle(opp_deck)
+    # Create the lists using the NEW variable names (p_data and o_data)
+    player_deck = list(p_data)
+    random.shuffle(player_deck)
+
+    opp_deck = list(o_data)
+    random.shuffle(opp_deck)
 
     # Game objects
     # Player hand sits at the screen bottom; opponent hand sits at the top.
@@ -268,6 +292,9 @@ def run_game():
     opp_hand     = Hand(anchor_y_override=OPPONENT_HAND_Y_THRESHOLD - 10, visible=False)
     opp_field    = []
     opp_gy       = Graveyard()
+
+    active_hand_obj = player_hand
+    inactive_hand_obj = opp_hand
 
     # Camera
     zoom_level     = 1.0
@@ -349,9 +376,17 @@ def run_game():
                     if active_player == "player":
                         turn_number += 1
 
-                    # Swap hand cards so each player sees their own cards
-                    player_hand.cards, opp_hand.cards = (
-                        opp_hand.cards, player_hand.cards)
+                # Swap which hand is active/visible
+                    if active_player == "player":
+                        active_hand_obj = player_hand
+                        inactive_hand_obj = opp_hand
+                    else:
+                        active_hand_obj = opp_hand
+                        inactive_hand_obj = player_hand
+
+                    # Ensure only the active player's hand is visible
+                    active_hand_obj.visible = True
+                    inactive_hand_obj.visible = False
                     # Wipe stale lerp state so cards don't fly from wrong pos
                     for c in player_hand.cards + opp_hand.cards:
                         for attr in ("lerp_x", "lerp_y", "target_x", "target_y",
@@ -391,66 +426,65 @@ def run_game():
                     selected_card = selected_owner = None
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
+                # --- LEFT CLICK (Button 1) ---
                 if event.button == 1:
-                    # LP box click — open editor for the clicked side
+                    # 1. LP box click
                     lp_hit = lp_hit_test(event.pos, player_lp, opp_lp)
                     if lp_hit:
-                        lp_edit_target  = lp_hit      # "player" or "opponent"
+                        lp_edit_target  = lp_hit
                         lp_input_buffer = ""
-                    # Deck clicks
-                    if p_deck_z and p_deck_z.collidepoint(event.pos) and player_deck:
-                        try:
-                            player_hand.add_card(load_card(player_deck.pop(), folder, back_img))
-                        except Exception as e:
-                            print(f"Card error: {e}")
 
-                    elif o_deck_z and o_deck_z.collidepoint(event.pos) and opp_deck:
-                        try:
-                            opp_hand.add_card(load_card(opp_deck.pop(), folder, back_img))
-                        except Exception as e:
-                            print(f"Card error: {e}")
+                    # 2. Deck clicks (using the active_player turn check)
+                    elif p_deck_z and p_deck_z.collidepoint(event.pos):
+                        if active_player == "player" and player_deck:
+                            try:
+                                active_hand_obj.add_card(load_card(player_deck.pop(), PLAYER_DECK_PATH, back_img))
+                            except Exception as e:
+                                print(f"Card error: {e}")
+                        elif active_player != "player":
+                            print("It's the opponent's turn!")
+
+                    elif o_deck_z and o_deck_z.collidepoint(event.pos):
+                        if active_player == "opponent" and opp_deck:
+                            try:
+                                active_hand_obj.add_card(load_card(opp_deck.pop(), OPPONENT_DECK_PATH, back_img))
+                            except Exception as e:
+                                print(f"Card error: {e}")
+                        elif active_player != "opponent":
+                            print("It's your turn, not the opponent's!")
 
                     else:
-                        # Hand picks (player first, then opponent)
+                        # 3. Hand and Field picks
                         picked = False
-                        for hand_obj, owner in ((player_hand, "player"),
-                                                 (opp_hand,   "opponent")):
-                            c = hand_obj.check_click(event.pos)
-                            if c:
-                                c.is_dragging  = True
-                                selected_card  = c
-                                selected_owner = owner
-                                hand_obj.remove_card(c)
-                                picked = True
-                                break
+                        # We only check the hand that is currently visible/active at the bottom
+                        c = active_hand_obj.check_click(event.pos)
+                        if c:
+                            c.is_dragging, selected_card, selected_owner = True, c, active_player
+                            active_hand_obj.remove_card(c)
+                            picked = True
 
                         if not picked:
-                            # Field picks
-                            for lst, owner in ((player_field, "player"),
-                                               (opp_field,   "opponent")):
-                                hit = next((c for c in reversed(lst)
-                                            if c.rect.collidepoint(event.pos)), None)
+                            # Field picks (still check both sides in case you interact across the line)
+                            for lst, owner in ((player_field, "player"), (opp_field, "opponent")):
+                                hit = next((c for c in reversed(lst) if c.rect.collidepoint(event.pos)), None)
                                 if hit:
-                                    hit.is_dragging = True
-                                    selected_card   = hit
-                                    selected_owner  = owner
-                                    hit.zone_name   = None
+                                    hit.is_dragging, selected_card, selected_owner = True, hit, owner
+                                    hit.zone_name = None
                                     lst.remove(hit)
                                     break
 
+                # --- MIDDLE CLICK (Button 2) - MUST be at the same level as 'if button == 1' ---
                 elif event.button == 2:
                     is_panning = True
 
+                # --- RIGHT CLICK (Button 3) ---
                 elif event.button == 3:
                     target = None
                     for lst in (player_field, opp_field):
-                        target = next((c for c in reversed(lst)
-                                       if c.rect.collidepoint(event.pos)), None)
-                        if target:
-                            break
+                        target = next((c for c in reversed(lst) if c.rect.collidepoint(event.pos)), None)
+                        if target: break
                     if not target:
-                        target = (player_hand.check_click(event.pos) or
-                                  opp_hand.check_click(event.pos))
+                        target = player_hand.check_click(event.pos) or opp_hand.check_click(event.pos)
                     if target:
                         target.toggle_position()
 

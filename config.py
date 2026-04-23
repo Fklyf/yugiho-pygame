@@ -42,7 +42,15 @@ HAND_LERP_SPEED        = 0.18
 
 # ── Snap-to-zone ───────────────────────────────────────────────────────────
 SNAP_RADIUS            = 60         # pixels — how close the card centre must be to a zone centre
-                                    # to trigger a snap
+
+DECKS = {
+    "Yugi": "assets/Deck_Yugi",
+    "Kaiba": "assets/Deck_Kaiba",
+}
+
+# Then set which ones are in use
+PLAYER_DECK_PATH = DECKS["Yugi"]
+OPPONENT_DECK_PATH = DECKS["Kaiba"]
 
 # ── Hand strip thresholds (used in Main.py) ────────────────────────────────
 # Cards dropped below PLAYER_HAND_Y go back into the player's hand
