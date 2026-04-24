@@ -287,7 +287,7 @@ def run_game():
     player_field = []
     player_gy    = Graveyard()
 
-    opp_hand     = Hand(anchor_y_override=OPPONENT_HAND_Y_THRESHOLD - 10, visible=False)
+    opp_hand     = Hand(visible=False)
     opp_field    = []
     opp_gy       = Graveyard()
 
@@ -498,7 +498,7 @@ def run_game():
                         selected_card.zone_name = None
                         player_hand.add_card(selected_card, drop_x=drop_pos[0])
 
-                    elif selected_owner == "opponent" and drop_y < OPPONENT_HAND_Y_THRESHOLD:
+                    elif selected_owner == "opponent" and drop_y > PLAYER_HAND_Y_THRESHOLD:
                         selected_card.zone_name = None
                         opp_hand.add_card(selected_card, drop_x=drop_pos[0])
 

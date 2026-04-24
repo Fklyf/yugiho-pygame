@@ -23,7 +23,7 @@ CARD_HAND_SIZE_RATIO = 0.13          # hand card size as a fraction of BASE_CARD
 # ── Hand layout ────────────────────────────────────────────────────────────
 # Anchor: where the centre of the hand fan sits on screen
 HAND_ANCHOR_X_OFFSET = 0            # pixels left/right from horizontal centre
-HAND_ANCHOR_Y_OFFSET = -20          # pixels up from the bottom edge
+HAND_ANCHOR_Y_OFFSET = -90          # pixels up from the bottom edge
 
 # Fan geometry
 HAND_SPACING         = 72           # pixels between card centres at rest
