@@ -6,7 +6,8 @@ class Card:
         # Scale the original images to the BASE_CARD_SIZE immediately
         self.original_image = pygame.transform.smoothscale(image, BASE_CARD_SIZE)
         self.original_back_image = pygame.transform.smoothscale(card_back_image, BASE_CARD_SIZE)
-        
+        self.owner = None
+
         self.image = self.original_image
         self.card_back_image = self.original_back_image
         

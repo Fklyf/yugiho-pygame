@@ -1,0 +1,123 @@
+[
+  {
+    "name": "Dark Magician",
+    "id": "46986414",
+    "type": "Normal Monster",
+    "desc": "''The ultimate wizard in terms of attack and defense.''",
+    "atk": 2500,
+    "def": 2100,
+    "level": 4,
+    "attribute": "DARK",
+    "race": "Spellcaster"
+  },
+  {
+    "name": "Dark Magician Girl",
+    "id": "38033121",
+    "type": "Effect Monster",
+    "desc": "Gains 300 ATK for every \"Dark Magician\" or \"Magician of Black Chaos\" in the GY.",
+    "atk": 2000,
+    "def": 1700,
+    "level": 4,
+    "attribute": "DARK",
+    "race": "Spellcaster"
+  },
+  {
+    "name": "Dark Magic Attack",
+    "id": "2314238",
+    "type": "Spell Card",
+    "desc": "If you control \"Dark Magician\": Destroy all Spells and Traps your opponent controls.",
+    "atk": null,
+    "def": null,
+    "level": null,
+    "attribute": null,
+    "race": "Normal"
+  },
+  {
+    "name": "Silver Fang",
+    "id": "90357090",
+    "type": "Normal Monster",
+    "desc": "A snow wolf that's beautiful to the eye, but absolutely vicious in battle.",
+    "atk": 1200,
+    "def": 800,
+    "level": 3,
+    "attribute": "EARTH",
+    "race": "Beast"
+  },
+  {
+    "name": "Silver Fang",
+    "id": "90357090",
+    "type": "Normal Monster",
+    "desc": "A snow wolf that's beautiful to the eye, but absolutely vicious in battle.",
+    "atk": 1200,
+    "def": 800,
+    "level": 3,
+    "attribute": "EARTH",
+    "race": "Beast"
+  },
+  {
+    "name": "Silver Fang",
+    "id": "90357090",
+    "type": "Normal Monster",
+    "desc": "A snow wolf that's beautiful to the eye, but absolutely vicious in battle.",
+    "atk": 1200,
+    "def": 800,
+    "level": 3,
+    "attribute": "EARTH",
+    "race": "Beast"
+  },
+  {
+    "name": "Silver Fang",
+    "id": "90357090",
+    "type": "Normal Monster",
+    "desc": "A snow wolf that's beautiful to the eye, but absolutely vicious in battle.",
+    "atk": 1200,
+    "def": 800,
+    "level": 3,
+    "attribute": "EARTH",
+    "race": "Beast"
+  },
+  {
+    "name": "Silver Fang",
+    "id": "90357090",
+    "type": "Normal Monster",
+    "desc": "A snow wolf that's beautiful to the eye, but absolutely vicious in battle.",
+    "atk": 1200,
+    "def": 800,
+    "level": 3,
+    "attribute": "EARTH",
+    "race": "Beast"
+  },
+  {
+    "name": "Silver Fang",
+    "id": "90357090",
+    "type": "Normal Monster",
+    "desc": "A snow wolf that's beautiful to the eye, but absolutely vicious in battle.",
+    "atk": 1200,
+    "def": 800,
+    "level": 3,
+    "attribute": "EARTH",
+    "race": "Beast"
+  },
+  {
+    "name": "Silver Fang",
+    "id": "90357090",
+    "type": "Normal Monster",
+    "desc": "A snow wolf that's beautiful to the eye, but absolutely vicious in battle.",
+    "atk": 1200,
+    "def": 800,
+    "level": 3,
+    "attribute": "EARTH",
+    "race": "Beast"
+  },
+  {
+    "name": "Silver Fang",
+    "id": "90357090",
+    "type": "Normal Monster",
+    "desc": "A snow wolf that's beautiful to the eye, but absolutely vicious in battle.",
+    "atk": 1200,
+    "def": 800,
+    "level": 3,
+    "attribute": "EARTH",
+    "race": "Beast"
+  }
+]

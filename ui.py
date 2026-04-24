@@ -44,6 +44,14 @@ HUD_DECK_COL       = (160, 160, 160)
 HUD_HINT_COL       = ( 80,  80, 100)
 HUD_EXPORT_COL     = (100, 220, 100)
 
+# Selection / interaction colours
+SEL_BORDER         = (255, 215,   0)   # gold — first selected card
+SEL_BORDER_WIDTH   = 3
+TARGET_BORDER      = (255,  80,  80)   # red — valid interaction target
+TARGET_BORDER_W    = 2
+INFO_BG            = ( 15,  15,  30, 210)
+INFO_BORDER        = ( 80,  80, 120)
+
 # LP widget colours
 LP_BOX_PLAYER_IDLE   = ( 30,  55,  30)
 LP_BOX_PLAYER_HOVER  = ( 45,  80,  45)
@@ -281,3 +289,200 @@ def draw_hud(screen, font, small_font,
     )
 
     return lp_edit_target, lp_input_buffer
+
+
+# ---------------------------------------------------------------------------
+# Public: selection highlight
+# ---------------------------------------------------------------------------
+
+def draw_selection_highlight(screen, selected_card, target_card=None,
+                              field_cards=None):
+    """
+    Draws a gold border around the selected card and a red border around
+    any valid interaction target (hovered field card when one is selected).
+
+    Call after draw_field_overlays so the highlight sits on top.
+    """
+    if selected_card and getattr(selected_card, "rect", None):
+        pygame.draw.rect(screen, SEL_BORDER, selected_card.rect,
+                         SEL_BORDER_WIDTH, border_radius=3)
+
+    if target_card and target_card is not selected_card:
+        pygame.draw.rect(screen, TARGET_BORDER, target_card.rect,
+                         TARGET_BORDER_W, border_radius=3)
+
+
+# ---------------------------------------------------------------------------
+# Public: card info panel
+# ---------------------------------------------------------------------------
+
+def draw_card_info_panel(screen, card, font, small_font):
+    """
+    Draws a compact info panel in the bottom-left corner showing the
+    selected card's name, type, ATK/DEF, and description snippet.
+    """
+    if card is None:
+        return
+
+    meta = getattr(card, "meta", {}) or {}
+    name      = meta.get("name", "Unknown")
+    card_type = meta.get("type", card.card_type)
+    atk       = meta.get("atk")
+    def_      = meta.get("def")
+    desc      = meta.get("desc", "")
+    mode      = getattr(card, "mode", "")
+
+    PAD   = 10
+    W     = 320
+    H     = 130
+    x     = PAD
+    y     = SCREEN_SIZE[1] - H - PAD - 54   # sit above the hint bar
+
+    # Background
+    bg = pygame.Surface((W, H), pygame.SRCALPHA)
+    bg.fill(INFO_BG)
+    screen.blit(bg, (x, y))
+    pygame.draw.rect(screen, INFO_BORDER, (x, y, W, H), 1, border_radius=5)
+
+    # Name
+    name_font = pygame.font.SysFont("Arial", 15, bold=True)
+    name_surf = name_font.render(name, True, SEL_BORDER)
+    screen.blit(name_surf, (x + PAD, y + PAD))
+
+    # Type + mode
+    type_font = pygame.font.SysFont("Arial", 12)
+    type_surf = type_font.render(f"{card_type}  [{mode}]", True, (160, 160, 200))
+    screen.blit(type_surf, (x + PAD, y + PAD + name_surf.get_height() + 2))
+
+    # ATK / DEF line
+    if atk is not None or def_ is not None:
+        stat_str  = ""
+        if atk is not None: stat_str += f"ATK {atk}"
+        if atk is not None and def_ is not None: stat_str += "  /  "
+        if def_ is not None: stat_str += f"DEF {def_}"
+        stat_surf = type_font.render(stat_str, True, (220, 200, 100))
+        screen.blit(stat_surf, (x + PAD, y + PAD + name_surf.get_height() + 18))
+
+    # Description (truncated to fit)
+    desc_y   = y + PAD + name_surf.get_height() + 36
+    desc_font = pygame.font.SysFont("Arial", 11)
+    max_chars = 58
+    lines     = []
+    words     = desc.split()
+    line      = ""
+    for word in words:
+        test = f"{line} {word}".strip()
+        if len(test) <= max_chars:
+            line = test
+        else:
+            lines.append(line)
+            line = word
+        if len(lines) == 2:
+            break
+    if line and len(lines) < 2:
+        lines.append(line)
+    if len(lines) == 2 and len(desc.split()) > len(" ".join(lines).split()):
+        lines[-1] = lines[-1][:max_chars - 3] + "..."
+
+    for i, ln in enumerate(lines):
+        screen.blit(desc_font.render(ln, True, (170, 170, 170)),
+                    (x + PAD, desc_y + i * 14))
+
+# ---------------------------------------------------------------------------
+# Public: centre-screen announcements
+# ---------------------------------------------------------------------------
+
+# Announcement colour palette
+_ANN_SPELL_BG      = (10,  10,  40, 200)   # dark blue — spell/trap
+_ANN_SPELL_TITLE   = (180, 140, 255)        # purple-white
+_ANN_SPELL_BODY    = (210, 210, 255)
+_ANN_DAMAGE_BG     = (40,  10,  10, 200)   # dark red — damage
+_ANN_DAMAGE_TITLE  = (255, 120,  80)        # orange-red
+_ANN_DAMAGE_BODY   = (255, 200, 180)
+_ANN_BORDER_SPELL  = (120,  80, 220)
+_ANN_BORDER_DAMAGE = (200,  60,  40)
+
+
+def draw_announcement(screen, title: str, body_lines: list[str],
+                       alpha: int, kind: str = "spell") -> None:
+    """
+    Renders a centred announcement banner that fades out over time.
+
+    Parameters
+    ----------
+    screen      : pygame.Surface
+    title       : bold headline (e.g. "Dark Magic Attack!")
+    body_lines  : list of detail strings shown below the title
+    alpha       : 0–255 opacity — pass a value that decrements each frame
+    kind        : "spell" (purple) | "damage" (red)
+
+    Usage in Main.py
+    ----------------
+    # In your game-state locals, keep two values:
+    #   announcement        = None | {"title": str, "body": list[str], "kind": str}
+    #   announcement_timer  = 0        (frames remaining, e.g. 180 = 3 s at 60 fps)
+    #
+    # When a spell resolves or damage is dealt:
+    #   announcement       = {"title": "Dark Magic Attack!", "body": [...], "kind": "spell"}
+    #   announcement_timer = 180
+    #
+    # Each frame, inside the draw loop:
+    #   if announcement_timer > 0:
+    #       alpha = min(255, announcement_timer * 4)   # fade out in last ~64 frames
+    #       draw_announcement(screen,
+    #                         announcement["title"],
+    #                         announcement["body"],
+    #                         alpha,
+    #                         announcement["kind"])
+    #       announcement_timer -= 1
+    """
+    if alpha <= 0:
+        return
+
+    if kind == "damage":
+        bg_col     = _ANN_DAMAGE_BG
+        title_col  = _ANN_DAMAGE_TITLE
+        body_col   = _ANN_DAMAGE_BODY
+        border_col = _ANN_BORDER_DAMAGE
+    else:
+        bg_col     = _ANN_SPELL_BG
+        title_col  = _ANN_SPELL_TITLE
+        body_col   = _ANN_SPELL_BODY
+        border_col = _ANN_BORDER_SPELL
+
+    title_font = pygame.font.SysFont("Arial", 32, bold=True)
+    body_font  = pygame.font.SysFont("Arial", 18)
+
+    title_surf = title_font.render(title, True, title_col)
+    body_surfs = [body_font.render(ln, True, body_col) for ln in body_lines]
+
+    PAD    = 24
+    W      = max(title_surf.get_width(), *(s.get_width() for s in body_surfs),
+                 300) + PAD * 2
+    H      = (PAD
+              + title_surf.get_height() + 8
+              + sum(s.get_height() + 4 for s in body_surfs)
+              + PAD)
+
+    cx, cy = SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] // 2
+    x      = cx - W // 2
+    y      = cy - H // 2
+
+    bg = pygame.Surface((W, H), pygame.SRCALPHA)
+    bg.fill((*bg_col[:3], min(alpha, bg_col[3])))
+    screen.blit(bg, (x, y))
+
+    border_surf = pygame.Surface((W, H), pygame.SRCALPHA)
+    pygame.draw.rect(border_surf, (*border_col, alpha), (0, 0, W, H), 2, border_radius=8)
+    screen.blit(border_surf, (x, y))
+
+    # Title
+    title_surf.set_alpha(alpha)
+    screen.blit(title_surf, (cx - title_surf.get_width() // 2, y + PAD))
+
+    # Body lines
+    ty = y + PAD + title_surf.get_height() + 8
+    for surf in body_surfs:
+        surf.set_alpha(alpha)
+        screen.blit(surf, (cx - surf.get_width() // 2, ty))
+        ty += surf.get_height() + 4

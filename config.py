@@ -31,7 +31,7 @@ HAND_CURVE_DIP       = 6            # Y-dip (pixels) per unit of offset² — co
 HAND_ANGLE_SPREAD    = 4            # degrees of tilt per unit of offset from centre
 
 # Hover behaviour
-HAND_HOVER_SCALE_MULT  = 2.2        # hovered card is this multiple of CARD_HAND_SIZE_RATIO
+HAND_HOVER_SCALE_MULT  = 1.8        # hovered card is this multiple of CARD_HAND_SIZE_RATIO
 HAND_HOVER_LIFT        = 160        # pixels the hovered card rises above its rest position
 HAND_HOVER_SHIFT       = 36         # pixels neighbours are pushed aside on hover
 HAND_HOVER_DIST_X      = 60         # X-proximity threshold to trigger hover (pixels)
@@ -41,18 +41,25 @@ HAND_HOVER_DIST_Y      = 130        # Y-proximity threshold to trigger hover (pi
 HAND_LERP_SPEED        = 0.18
 
 # ── Snap-to-zone ───────────────────────────────────────────────────────────
-SNAP_RADIUS            = 60         # pixels — how close the card centre must be to a zone centre
+SNAP_RADIUS            = 100         # pixels — how close the card centre must be to a zone centre
 
 DECKS = {
     "Yugi": "assets/Deck_Yugi",
     "Kaiba": "assets/Deck_Kaiba",
+    "Test1": "assets/Deck_Card_Test1",
 }
 
 # Then set which ones are in use
-PLAYER_DECK_PATH = DECKS["Yugi"]
-OPPONENT_DECK_PATH = DECKS["Kaiba"]
+PLAYER_DECK_PATH = DECKS["Test1"]
+OPPONENT_DECK_PATH = DECKS["Test1"]
 
-# ── Hand strip thresholds (used in Main.py) ────────────────────────────────
+# ── Rules mode ─────────────────────────────────────────────────────────────
+# "sandbox" — no restrictions, cards can do anything at any time
+# "loose"   — rules are tracked and warned about, but never hard-blocked
+# "strict"  — full YGO rules enforced, illegal actions are rejected
+RULES_MODE = "sandbox"
+STARTING_HAND_SIZE = 5
+INSTANT_HAND       = False
 # Cards dropped below PLAYER_HAND_Y go back into the player's hand
 # Cards dropped above OPPONENT_HAND_Y go back into the opponent's hand
 PLAYER_HAND_Y_THRESHOLD   = SCREEN_SIZE[1] - 140
