@@ -36,6 +36,25 @@ Supported hooks (add more as needed)
 from __future__ import annotations
 from typing import Callable, Any
 
+
+# ---------------------------------------------------------------------------
+# Shared exceptions (raised by card effect handlers, caught by game.py)
+# ---------------------------------------------------------------------------
+
+class PhaseError(Exception):
+    """Raised when a card is activated in the wrong phase."""
+
+
+class ActivationConditionError(Exception):
+    """Raised when a card's activation condition isn't met
+    (e.g. required monster not on field)."""
+
+
+class SetTimingError(Exception):
+    """Raised when a Trap or Quick-Play Spell is activated the same turn
+    it was Set. Vanilla YGO timing rule."""
+
+
 # Registry: { card_id: { hook_name: handler_fn } }
 _registry: dict[str, dict[str, Callable]] = {}
 

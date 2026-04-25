@@ -7,11 +7,15 @@ draw_snap_highlight(screen, zones, drag_pos, owner)
 draw_field_overlays(screen, zones, player_field, opp_field, mouse_pos)
 draw_hud(screen, font, small_font, active_player, turn_number,
          player_deck, opp_deck, player_lp, opp_lp,
-         export_flash, hints, lp_edit_target, lp_input_buffer, mouse_pos)
+         export_flash, hints, lp_edit_target, lp_input_buffer, mouse_pos,
+         game_phase)
     → returns (lp_edit_target, lp_input_buffer)
 
 lp_hit_test(mouse_pos, player_lp, opp_lp)
     → "player" | "opponent" | None
+
+phase_btn_hit_test(mouse_pos, game_phase)
+    → True | False  (False at End Phase, even if mouse is over the button)
 """
 
 import math
@@ -70,6 +74,22 @@ _LP_BOX_H  = 60
 _LP_MARGIN = 14
 _LP_PAD    = 10
 
+# Phase button — sits to the LEFT of the opponent LP box (top-right area),
+# vertically aligned with the LP box's top edge so the HUD reads as one row.
+PHASE_BTN_BG_IDLE     = ( 40,  70, 120)
+PHASE_BTN_BG_HOVER    = ( 70, 110, 170)
+PHASE_BTN_BG_DISABLED = ( 60,  60,  60)
+PHASE_BTN_FG_IDLE     = (220, 230, 245)
+PHASE_BTN_FG_HOVER    = (255, 255, 255)
+PHASE_BTN_FG_DISABLED = (140, 140, 140)
+PHASE_BTN_BORDER_IDLE     = ( 90, 130, 180)
+PHASE_BTN_BORDER_HOVER    = (140, 180, 230)
+PHASE_BTN_BORDER_DISABLED = ( 90,  90,  90)
+
+_PHASE_BTN_W   = 150
+_PHASE_BTN_H   = 36
+_PHASE_BTN_GAP = 12   # horizontal gap between the button and the opp LP box
+
 
 # ---------------------------------------------------------------------------
 # LP box rects
@@ -87,6 +107,17 @@ def _opp_lp_rect():
     return pygame.Rect(x, y, _LP_BOX_W, _LP_BOX_H)
 
 
+def _phase_btn_rect():
+    """
+    Top-right strip, immediately left of the opponent LP box.
+    Vertically centred against the LP box so the row reads cleanly.
+    """
+    opp = _opp_lp_rect()
+    x = opp.left - _PHASE_BTN_GAP - _PHASE_BTN_W
+    y = opp.centery - _PHASE_BTN_H // 2
+    return pygame.Rect(x, y, _PHASE_BTN_W, _PHASE_BTN_H)
+
+
 # ---------------------------------------------------------------------------
 # Public: lp_hit_test
 # ---------------------------------------------------------------------------
@@ -98,6 +129,21 @@ def lp_hit_test(mouse_pos, player_lp, opp_lp):
     if _opp_lp_rect().collidepoint(mouse_pos):
         return "opponent"
     return None
+
+
+# ---------------------------------------------------------------------------
+# Public: phase_btn_hit_test
+# ---------------------------------------------------------------------------
+
+def phase_btn_hit_test(mouse_pos, game_phase):
+    """
+    Returns True if the Next-Phase button was clicked AND it's enabled.
+    Disabled at End Phase since there's nowhere further to advance —
+    the player must press Tab to actually end the turn.
+    """
+    if game_phase == "End":
+        return False
+    return _phase_btn_rect().collidepoint(mouse_pos)
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +212,41 @@ def _draw_lp_box(screen, rect, label, lp_value,
         screen.blit(hint, (rect.x + _LP_PAD, vy + 2))
 
 
+def _draw_phase_button(screen, font, rect, game_phase, mouse_pos):
+    """
+    Renders the Next-Phase button at *rect*.
+
+    States:
+      • End Phase   → disabled appearance, label flips to "End Phase ▸",
+                      no hover effect (see phase_btn_hit_test which also
+                      ignores clicks at End so the visual matches behaviour).
+      • Hovered     → brighter background and border for affordance.
+      • Idle        → muted blue background.
+    """
+    at_end  = (game_phase == "End")
+    hovered = rect.collidepoint(mouse_pos) and not at_end
+
+    if at_end:
+        bg, fg, border = (PHASE_BTN_BG_DISABLED,
+                          PHASE_BTN_FG_DISABLED,
+                          PHASE_BTN_BORDER_DISABLED)
+    elif hovered:
+        bg, fg, border = (PHASE_BTN_BG_HOVER,
+                          PHASE_BTN_FG_HOVER,
+                          PHASE_BTN_BORDER_HOVER)
+    else:
+        bg, fg, border = (PHASE_BTN_BG_IDLE,
+                          PHASE_BTN_FG_IDLE,
+                          PHASE_BTN_BORDER_IDLE)
+
+    pygame.draw.rect(screen, bg,     rect, border_radius=6)
+    pygame.draw.rect(screen, border, rect, width=2, border_radius=6)
+
+    label = "End Phase ▸" if at_end else "Next Phase ▸"
+    text  = font.render(label, True, fg)
+    screen.blit(text, text.get_rect(center=rect.center))
+
+
 # ---------------------------------------------------------------------------
 # Public draw calls
 # ---------------------------------------------------------------------------
@@ -230,19 +311,26 @@ def draw_hud(screen, font, small_font,
              player_lp, opp_lp,
              export_flash, hints,
              lp_edit_target, lp_input_buffer,
-             mouse_pos=(0, 0)):
+             mouse_pos=(0, 0),
+             game_phase="Main 1"):
     """
     Draws the full HUD including turn info, deck counts, hints, export flash,
-    and the two LP boxes.
+    the Next-Phase button, and the two LP boxes.
 
     Returns (lp_edit_target, lp_input_buffer) — unchanged, so Main.py can
     keep mutating them via KEYDOWN events without round-trip confusion.
+
+    game_phase is used by the Next-Phase button for its label/disabled state.
+    Defaults to "Main 1" so older callers that don't pass it still render a
+    sensible button (just won't reflect actual phase) — update call sites to
+    pass the real phase.
     """
     # Turn / active player
     col = HUD_PLAYER_COL if active_player == "player" else HUD_OPPONENT_COL
     screen.blit(font.render(
         f"Turn {turn_number}  │  Active: {active_player.upper()}"
-        f"  │  [Tab = end turn]",
+        f"  │  Phase: {game_phase}"
+        f"  │  [Tab = end turn, Space = next phase]",
         True, col), (10, 10))
 
     # Deck counts
@@ -260,6 +348,9 @@ def draw_hud(screen, font, small_font,
         fs = small_font.render("✓  game_state.json saved", True, HUD_EXPORT_COL)
         fs.set_alpha(min(255, export_flash * 4))
         screen.blit(fs, (10, 56))
+
+    # Next-Phase button (top-right strip, immediately left of opp LP box)
+    _draw_phase_button(screen, font, _phase_btn_rect(), game_phase, mouse_pos)
 
     # LP boxes
     p_rect    = _player_lp_rect()

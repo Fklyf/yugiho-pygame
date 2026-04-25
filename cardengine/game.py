@@ -43,6 +43,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cardengine import battle, rules, effects
+from cardengine.cards import dark_magic_attack
 
 try:
     from config import RULES_MODE
@@ -59,11 +60,13 @@ if TYPE_CHECKING:
 
 def submit_action(action: str, context: dict) -> dict:
     handlers = {
-        "attack":     _handle_attack,
-        "summon":     _handle_summon,
-        "activate":   _handle_activate,
-        "send_to_gy": _handle_send_to_gy,
-        "draw":       _handle_draw,
+        "attack":         _handle_attack,
+        "summon":         _handle_summon,
+        "activate":       _handle_activate,
+        "set":            _handle_set,
+        "flip_activate":  _handle_flip_activate,
+        "send_to_gy":     _handle_send_to_gy,
+        "draw":           _handle_draw,
     }
     handler = handlers.get(action)
     if handler is None:
@@ -95,8 +98,27 @@ def apply_result(result: dict, game_objects: dict) -> None:
         game_objects["opp_lp"][0]    = max(0, game_objects["opp_lp"][0]    - o_dmg)
 
     # ── 2. Cards sent to GY ───────────────────────────────────────────────
+    _gy_debug = result.get("send_to_gy") or []
+    if _gy_debug:
+        def _gdbg(msg):
+            print(msg)
+            try:
+                with open("dma_debug.txt", "a", encoding="utf-8") as f:
+                    f.write(msg + "\n")
+            except Exception:
+                pass
+        _gdbg(f"[apply_result] processing {len(_gy_debug)} send_to_gy cards")
+        _gdbg(f"[apply_result] player_field len before: {len(game_objects['player_field'])}")
+        _gdbg(f"[apply_result] opp_field    len before: {len(game_objects['opp_field'])}")
+
     for card in result.get("send_to_gy", []):
         owner = getattr(card, "owner", None)
+        if _gy_debug:
+            name = (getattr(card, "meta", {}) or {}).get("name", "?")
+            in_pf = card in game_objects["player_field"]
+            in_of = card in game_objects["opp_field"]
+            _gdbg(f"[apply_result]   card={name!r} owner={owner!r} "
+                  f"in_player_field={in_pf} in_opp_field={in_of}")
 
         # Remove from whichever field/hand it might still be in
         _safe_remove(game_objects["player_field"], card)
@@ -110,6 +132,12 @@ def apply_result(result: dict, game_objects: dict) -> None:
         else:
             # Default: player-owned or unowned cards go to player GY
             game_objects["player_gy"].add_card(card)
+
+    if _gy_debug:
+        _gdbg(f"[apply_result] player_field len after:  {len(game_objects['player_field'])}")
+        _gdbg(f"[apply_result] opp_field    len after:  {len(game_objects['opp_field'])}")
+        _gdbg(f"[apply_result] player_gy    len after:  {len(game_objects['player_gy'].cards)}")
+        _gdbg(f"[apply_result] opp_gy       len after:  {len(game_objects['opp_gy'].cards)}")
 
     # ── 3. Summoned card → field ──────────────────────────────────────────
     # apply_result is the single source of truth for placing a card on the
@@ -206,8 +234,15 @@ def _handle_attack(ctx: dict) -> dict:
 
     a_name = _name(attacker)
 
+    # Battle math needs the full game_state so continuous effects
+    # (e.g. Dark Magician Girl's +300/DM-or-MoBC-in-GY bonus) can read
+    # the graveyards and field. Merge active_player onto the state
+    # dict the caller supplied.
+    battle_ctx = dict(game_state) if game_state else {}
+    battle_ctx["active_player"] = active_player
+
     if defender is None:
-        res = battle.resolve_direct_attack(attacker, {"active_player": active_player})
+        res = battle.resolve_direct_attack(attacker, battle_ctx)
         log.append(f"{a_name} attacks directly for {res['damage']} damage!")
         return _ok(log=log, lp_damage=_lp_from_result(res))
 
@@ -222,7 +257,7 @@ def _handle_attack(ctx: dict) -> dict:
     effects.dispatch("on_damage_calc", attacker, dmg_ctx)
     effects.dispatch("on_damage_calc", defender, dmg_ctx)
 
-    res = battle.resolve_attack(attacker, defender, {"active_player": active_player})
+    res = battle.resolve_attack(attacker, defender, battle_ctx)
 
     to_gy   = []
     eff_msg = dmg_ctx.get("effect_message")
@@ -292,7 +327,12 @@ def _handle_summon(ctx: dict) -> dict:
         )
 
     # ── Normal / Tribute Summon ────────────────────────────────────────────
-    ok, reason = rules.can_normal_summon(card, field_monsters, tributes)
+    # Pass game_state through so rules.can_normal_summon can enforce the
+    # phase restriction (Main Phase 1/2 only) and other state-dependent
+    # rules. Without this the rule check sees an empty dict and silently
+    # short-circuits the phase guard.
+    game_state = ctx.get("game_state", {}) or {}
+    ok, reason = rules.can_normal_summon(card, field_monsters, tributes, game_state)
     if not ok:
         return _err(reason)
 
@@ -354,6 +394,9 @@ def _handle_activate(ctx: dict) -> dict:
 
     try:
         effects.dispatch("on_spell_activate", card, ctx)
+    except (effects.PhaseError, effects.ActivationConditionError) as e:
+        # Clean rule-level blocks — show the card's own message, not a crash.
+        return _err(str(e))
     except Exception as e:
         return _err(f"Effect Error: {str(e)}")
 
@@ -365,7 +408,156 @@ def _handle_activate(ctx: dict) -> dict:
     if effect_msg:
         log.append(effect_msg)
 
-    return _ok(log=log, send_to_gy=effect_gy, effect_message=effect_msg)
+    result = _ok(log=log, send_to_gy=effect_gy, effect_message=effect_msg)
+    for ann_key in ("announcement_title", "announcement_body", "announcement_kind"):
+        if ann_key in ctx:
+            result[ann_key] = ctx[ann_key]
+    return result
+
+
+def _handle_set(ctx: dict) -> dict:
+    """
+    Set a card face-down in the appropriate zone.
+
+    Context keys
+    ------------
+    card           : Card            — the card being Set
+    owner          : "player" | "opponent"
+    field_monsters : list[Card]      — owner's full field list (monsters+S/T)
+    tributes       : list[Card]      — only for monster Sets that need tributes
+    game_state     : dict            — current turn number flows through here
+
+    Effects are NOT fired on Set. For monsters that's vanilla rules; for
+    spells/traps the effect hook fires on ``flip_activate`` instead.
+
+    Stamps ``card.turn_set = turn_number`` so ``can_flip_activate`` can
+    enforce the 'same turn' rule later.
+    """
+    card           = ctx.get("card")
+    owner          = ctx.get("owner", getattr(card, "owner", "player") if card else "player")
+    field_cards    = ctx.get("field_monsters", [])
+    tributes       = ctx.get("tributes", []) or []
+    game_state     = ctx.get("game_state", {}) or {}
+
+    if card is None:
+        return _err("No card provided.")
+
+    # Stamp owner so apply_result can route correctly if needed
+    if not getattr(card, "owner", None):
+        card.owner = owner
+
+    # ── Spell / Trap Set ──────────────────────────────────────────────────
+    if rules.is_spell(card) or rules.is_trap(card):
+        ok, reason = rules.can_set_spell_trap(card, field_cards, game_state)
+        if not ok:
+            return _err(reason)
+        card.mode = "SET"
+        card.turn_set = game_state.get("turn") or game_state.get("meta", {}).get("turn")
+        return _ok(
+            log=[f"{_name(card)} set face-down."],
+            summoned_card=card,
+        )
+
+    # ── Monster Set (face-down DEF) ───────────────────────────────────────
+    if rules.is_monster(card):
+        # Extra Deck monsters cannot be Set any more than they can be Normal Summoned.
+        if rules.is_extra_deck_monster(card):
+            meta_type = (getattr(card, "meta", {}) or {}).get("type", "Extra Deck monster")
+            return _err(f"{meta_type} cannot be Set.")
+
+        # Only monster cards count toward tribute accounting & zone cap here.
+        monsters_only = [c for c in field_cards if rules.is_monster(c)]
+        ok, reason = rules.can_set_monster(card, monsters_only, tributes, game_state)
+        if not ok:
+            return _err(reason)
+
+        # Validate tributes exist on field (same guard as Normal Summon)
+        field_ids = set(id(m) for m in monsters_only)
+        for t in tributes:
+            if id(t) not in field_ids:
+                return _err(f"Tribute '{_name(t)}' is not on your field and cannot be tributed.")
+
+        for t in tributes:
+            if not getattr(t, "owner", None):
+                t.owner = owner
+
+        card.mode = "SET"
+        card.turn_set = game_state.get("turn") or game_state.get("meta", {}).get("turn")
+        card.summoning_sickness = True   # Set still consumes the once-per-turn budget
+
+        log = [f"{_name(card)} Set face-down."]
+        if tributes:
+            log.append(f"Tributed: {', '.join(_name(t) for t in tributes)}")
+
+        return _ok(
+            log=log,
+            send_to_gy=tributes,
+            summoned_card=card,
+        )
+
+    return _err("This card type cannot be Set.")
+
+
+def _handle_flip_activate(ctx: dict) -> dict:
+    """
+    Flip a face-down Set Spell/Trap face-up and resolve its effect through
+    the same pipeline as a hand-activated Spell.
+
+    Monsters are NOT routed through here — flipping a face-down Set monster
+    face-up is handled by Main.py's ``toggle_position`` cycle (ATK/DEF).
+    """
+    card = ctx.get("card")
+    if card is None:
+        return _err("No card provided.")
+
+    if rules.is_monster(card):
+        return _err("Use position toggle (not flip-activate) for monster cards.")
+
+    game_state = ctx.get("game_state", {}) or {}
+
+    # Timing rule: Traps / Quick-Play Spells can't activate the turn they were Set.
+    ok, reason = rules.can_flip_activate(card, game_state)
+    if not ok:
+        return _err(reason)
+
+    # Flip face-up BEFORE dispatching the effect so _controls_monster and
+    # similar live-field checks see the card as face-up (not "SET").
+    card.mode = "ATK"   # spells/traps don't have a battle position; "ATK"
+                        # just means 'face-up' in our mode enum
+
+    log = [f"{_name(card)} flipped face-up."]
+
+    # Targeting checks (if the caller supplied targets)
+    targets = ctx.get("targets", []) or []
+    for target in targets:
+        ok, reason = rules.can_be_targeted(target)
+        if not ok:
+            # Revert the flip since activation failed
+            card.mode = "SET"
+            return _err(f"Invalid target — {reason}")
+
+    try:
+        effects.dispatch("on_spell_activate", card, ctx)
+    except (effects.PhaseError, effects.ActivationConditionError, effects.SetTimingError) as e:
+        # Revert the flip so the card stays Set and can be tried later.
+        card.mode = "SET"
+        return _err(str(e))
+    except Exception as e:
+        card.mode = "SET"
+        return _err(f"Effect Error: {str(e)}")
+
+    effect_gy  = ctx.get("send_to_gy") or []
+    effect_msg = ctx.get("effect_message")
+    if effect_msg:
+        log.append(effect_msg)
+
+    # If it's a Normal Spell or Trap, caller (Main.py) is responsible for
+    # sending THIS card to GY after resolution. Continuous/Equip/Field stay.
+    result = _ok(log=log, send_to_gy=effect_gy, effect_message=effect_msg)
+    for ann_key in ("announcement_title", "announcement_body", "announcement_kind"):
+        if ann_key in ctx:
+            result[ann_key] = ctx[ann_key]
+    return result
 
 
 def _handle_send_to_gy(ctx: dict) -> dict:
@@ -452,3 +644,13 @@ def _safe_remove(lst: list, item) -> None:
         lst.remove(item)
     except ValueError:
         pass
+
+# ---------------------------------------------------------------------------
+# Card effect modules
+# ---------------------------------------------------------------------------
+# Explicit imports here guarantee every card's register() call has executed
+# by the time submit_action is reachable. This is more reliable than relying
+# on cardengine/__init__.py auto-discovery, which can silently miss files.
+# When you add a new card effect module, add it to this list.
+
+from cardengine.cards import dark_magic_attack  # noqa: F401

@@ -41,12 +41,13 @@ Phase strings used by Main.py  (defined in PHASES constant):
 """
 
 from __future__ import annotations
-from cardengine.effects import register
+from cardengine.effects import register, PhaseError, ActivationConditionError
 
+print("[DMA module] dark_magic_attack.py was imported")
 
 # ── Card identity ─────────────────────────────────────────────────────────────
 
-CARD_ID   = "2314238"
+CARD_ID   = "02314238"   # Canonical Konami passcode (8 digits, leading zero)
 CARD_NAME = "Dark Magic Attack"
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -59,10 +60,8 @@ _VALID_PHASES = {"Main 1", "Main 2"}
 
 
 # ── Phase guard (reusable by all spell/trap effects) ──────────────────────────
-
-class PhaseError(Exception):
-    """Raised when a card is activated in the wrong phase."""
-
+# PhaseError is imported from cardengine.effects so game.py can catch it
+# without needing to reach into individual card modules.
 
 def _require_phase(context: dict, *allowed: str) -> None:
     """
@@ -178,13 +177,54 @@ def _on_spell_activate(card, context: dict) -> None:
 
     # ── 2. Activation condition ───────────────────────────────────────────
     if not _controls_monster(context, active_player, _REQUIRED_MONSTER):
-        raise ValueError(
+        raise ActivationConditionError(
             f'You must control "{_REQUIRED_MONSTER}" to activate {CARD_NAME}.'
         )
 
     # ── 3. Collect opponent's Spell/Trap cards ────────────────────────────
     opp = "opponent" if active_player == "player" else "player"
+
+    # ── DIAGNOSTIC (safe to leave in — prints once per activation) ────────
+    # Writes to both stdout AND dma_debug.txt so the log survives even when
+    # the game is launched by double-click (no visible terminal).
+    def _dbg(msg):
+        print(msg)
+        try:
+            with open("dma_debug.txt", "a", encoding="utf-8") as f:
+                f.write(msg + "\n")
+        except Exception:
+            pass
+
+    _dbg("")
+    _dbg("=" * 60)
+    _dbg(f"[DMA debug] Activation fired.")
+    _dbg(f"[DMA debug] active_player={active_player!r}, opp={opp!r}")
+    _dbg(f"[DMA debug] context keys: {sorted(context.keys())}")
+
+    # What's actually in player_field / opp_field as the effect sees it?
+    pf = context.get("player_field")
+    of = context.get("opp_field")
+    _dbg(f"[DMA debug] context['player_field'] is {type(pf).__name__} with "
+         f"{len(pf) if pf is not None else 'n/a'} items")
+    _dbg(f"[DMA debug] context['opp_field']    is {type(of).__name__} with "
+         f"{len(of) if of is not None else 'n/a'} items")
+
+    live_opp = _live_field(context, opp)
+    _dbg(f"[DMA debug] _live_field(opp) returned {len(live_opp)} cards")
+    for i, c in enumerate(live_opp):
+        ctype = _card_type_str(c)
+        cname = _card_name(c)
+        cmode = c.get("mode") if isinstance(c, dict) else getattr(c, "mode", "?")
+        is_dict = isinstance(c, dict)
+        has_meta = (not is_dict) and bool(getattr(c, "meta", None))
+        _dbg(f"[DMA debug]   [{i}] name={cname!r} type={ctype!r} "
+             f"mode={cmode!r} is_dict={is_dict} has_meta={has_meta}")
+
     opp_spells = _get_opp_spells_traps(context, opp)
+    _dbg(f"[DMA debug] _get_opp_spells_traps returned {len(opp_spells)} cards")
+    for c in opp_spells:
+        _dbg(f"[DMA debug]   queued for GY: {_card_name(c)!r} "
+             f"owner={getattr(c, 'owner', None)!r}")
 
     # ── 4. Queue for destruction ──────────────────────────────────────────
     existing = context.get("send_to_gy") or []
@@ -224,5 +264,10 @@ def _on_spell_activate(card, context: dict) -> None:
 
 
 # ── Registration ──────────────────────────────────────────────────────────────
-
-register(CARD_ID, "on_spell_activate", _on_spell_activate)
+# Register under both 8-digit (canonical Konami) and 7-digit forms so the
+# dispatcher matches whether metadata.json stores the id with or without the
+# leading zero. effects.dispatch() does str(meta["id"]) for lookup, so an int
+# stored as 2314238 normalises to "2314238", while a string "02314238" stays
+# as "02314238" — different keys, same card.
+register(CARD_ID,            "on_spell_activate", _on_spell_activate)
+register(CARD_ID.lstrip("0"), "on_spell_activate", _on_spell_activate)

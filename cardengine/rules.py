@@ -225,6 +225,19 @@ def can_normal_summon(card: "Card", field_monsters: list, tributes: list = None,
     tributes   = tributes   or []
     game_state = game_state or {}
 
+    # Phase restriction: Normal Summons are only legal in Main Phase 1 or 2.
+    # We check this before other rules so the user gets the most relevant
+    # error first (no point telling them they're missing tributes if they
+    # can't summon in this phase anyway). Same hard-block policy as the rest
+    # of can_normal_summon — placing a card on the field outside Main Phase
+    # would corrupt turn structure.
+    phase = game_state.get("phase", "")
+    if phase and phase not in ("Main 1", "Main 2"):
+        return False, (
+            f"Monsters can only be Normal Summoned during Main Phase 1 or 2 "
+            f"(current phase: {phase})."
+        )
+
     # Only one Normal/Tribute Summon per turn.
     if game_state.get("has_summoned_this_turn", False):
         return False, "You can only Normal Summon once per turn."
@@ -325,3 +338,61 @@ def has_open_monster_zone(field_monsters: list) -> bool:
 
 def has_open_spell_trap_zone(field_spells: list) -> bool:
     return len(field_spells) < MAX_SPELL_TRAP_ZONES
+
+
+# ---------------------------------------------------------------------------
+# Set / Flip-activate legality
+# ---------------------------------------------------------------------------
+
+def can_set_spell_trap(card: "Card", field_cards: list, game_state: dict = None) -> tuple[bool, str]:
+    """
+    Returns (ok, reason) for setting a Spell/Trap face-down.
+    - Must be a Spell or Trap.
+    - Must have a free Spell/Trap zone. Here ``field_cards`` is the owner's
+      full field list (monsters + spells/traps, as Main.py has no separate
+      spell/trap zone list). We count non-monster cards as occupying S/T zones.
+    """
+    if is_monster(card):
+        return False, "Monsters cannot be Set to a Spell/Trap zone."
+    if not (is_spell(card) or is_trap(card)):
+        return False, "Only Spells or Traps can be Set to a Spell/Trap zone."
+    st_count = sum(1 for c in field_cards if not is_monster(c))
+    if st_count >= MAX_SPELL_TRAP_ZONES:
+        return False, "Spell/Trap zones are full."
+    return True, ""
+
+
+def can_set_monster(card: "Card", field_monsters: list, tributes: list = None, game_state: dict = None) -> tuple[bool, str]:
+    """
+    Returns (ok, reason) for Setting a monster face-down in DEF.
+    Piggybacks the Normal Summon rules — Sets and Normal Summons share the
+    'once per turn' budget and the same tribute costs.
+    """
+    return can_normal_summon(card, field_monsters, tributes or [], game_state or {})
+
+
+def can_flip_activate(card: "Card", game_state: dict = None) -> tuple[bool, str]:
+    """
+    Returns (ok, reason) for flipping a face-down Spell/Trap face-up to
+    activate it.
+
+    Rules enforced (always hard-block — these are timing-critical):
+      • Traps and Quick-Play Spells cannot be activated the turn they were Set.
+        We check ``card.turn_set`` against ``game_state["turn"]``.
+      • Normal Spells, Continuous Spells, Equip Spells, Field Spells have no
+        same-turn restriction.
+    """
+    game_state = game_state or {}
+    current_turn = game_state.get("turn") or game_state.get("meta", {}).get("turn")
+    turn_set     = getattr(card, "turn_set", None)
+
+    meta       = getattr(card, "meta", {}) or {}
+    card_type  = str(meta.get("type", getattr(card, "card_type", "")))
+    is_trap_c       = "Trap" in card_type
+    is_quickplay_c  = "Quick-Play" in card_type
+
+    if (is_trap_c or is_quickplay_c) and turn_set is not None and turn_set == current_turn:
+        label = "Trap" if is_trap_c else "Quick-Play Spell"
+        return False, f"{label} cannot be activated the turn it was Set."
+
+    return True, ""

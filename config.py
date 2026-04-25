@@ -59,7 +59,7 @@ OPPONENT_DECK_PATH = DECKS["Test1"]
 # "strict"  — full YGO rules enforced, illegal actions are rejected
 RULES_MODE = "sandbox"
 STARTING_HAND_SIZE = 5
-INSTANT_HAND       = False
+INSTANT_HAND       = True
 # Cards dropped below PLAYER_HAND_Y go back into the player's hand
 # Cards dropped above OPPONENT_HAND_Y go back into the opponent's hand
 PLAYER_HAND_Y_THRESHOLD   = SCREEN_SIZE[1] - 140
