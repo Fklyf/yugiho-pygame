@@ -18,7 +18,7 @@ LABEL_COLOR  = (120, 120, 180)
 
 # ── Card sizing ────────────────────────────────────────────────────────────
 BASE_CARD_SIZE      = (1100, 1600)   # source resolution cards are normalised to
-CARD_HAND_SIZE_RATIO = 0.13          # hand card size as a fraction of BASE_CARD_SIZE
+CARD_HAND_SIZE_RATIO = 0.16          # hand card size as a fraction of BASE_CARD_SIZE
 
 # ── Hand layout ────────────────────────────────────────────────────────────
 # Anchor: where the centre of the hand fan sits on screen
@@ -31,7 +31,7 @@ HAND_CURVE_DIP       = 6            # Y-dip (pixels) per unit of offset² — co
 HAND_ANGLE_SPREAD    = 4            # degrees of tilt per unit of offset from centre
 
 # Hover behaviour
-HAND_HOVER_SCALE_MULT  = 1.8        # hovered card is this multiple of CARD_HAND_SIZE_RATIO
+HAND_HOVER_SCALE_MULT  = 1.4        # hovered card is this multiple of CARD_HAND_SIZE_RATIO
 HAND_HOVER_LIFT        = 160        # pixels the hovered card rises above its rest position
 HAND_HOVER_SHIFT       = 36         # pixels neighbours are pushed aside on hover
 HAND_HOVER_DIST_X      = 60         # X-proximity threshold to trigger hover (pixels)
@@ -47,11 +47,12 @@ DECKS = {
     "Yugi": "assets/Deck_Yugi",
     "Kaiba": "assets/Deck_Kaiba",
     "Test1": "assets/Deck_Card_Test1",
+    "NormalDeck": "assets/deck_images",
 }
 
 # Then set which ones are in use
-PLAYER_DECK_PATH = DECKS["Test1"]
-OPPONENT_DECK_PATH = DECKS["Test1"]
+PLAYER_DECK_PATH = DECKS["NormalDeck"]
+OPPONENT_DECK_PATH = DECKS["NormalDeck"]
 
 # ── Rules mode ─────────────────────────────────────────────────────────────
 # "sandbox" — no restrictions, cards can do anything at any time

@@ -232,9 +232,9 @@ def can_normal_summon(card: "Card", field_monsters: list, tributes: list = None,
     # of can_normal_summon — placing a card on the field outside Main Phase
     # would corrupt turn structure.
     phase = game_state.get("phase", "")
-    if phase and phase not in ("Main 1", "Main 2"):
+    if phase and phase not in ("Main",):
         return False, (
-            f"Monsters can only be Normal Summoned during Main Phase 1 or 2 "
+            f"Monsters can only be Normal Summoned during Main Phase "
             f"(current phase: {phase})."
         )
 

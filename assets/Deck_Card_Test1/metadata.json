@@ -33,10 +33,10 @@
     "race": "Normal"
   },
   {
-    "name": "Dark Magic Attack",
-    "id": "2314238",
+    "name": "Pot of Greed",
+    "id": "55144522",
     "type": "Spell Card",
-    "desc": "If you control \"Dark Magician\": Destroy all Spells and Traps your opponent controls.",
+    "desc": "Draw 2 cards.",
     "atk": null,
     "def": null,
     "level": null,
@@ -44,15 +44,48 @@
     "race": "Normal"
   },
   {
-    "name": "Dark Magic Attack",
-    "id": "2314238",
+    "name": "Pot of Greed",
+    "id": "55144522",
     "type": "Spell Card",
-    "desc": "If you control \"Dark Magician\": Destroy all Spells and Traps your opponent controls.",
+    "desc": "Draw 2 cards.",
     "atk": null,
     "def": null,
     "level": null,
     "attribute": null,
     "race": "Normal"
+  },
+  {
+    "name": "Kuriboh",
+    "id": "40640057",
+    "type": "Effect Monster",
+    "desc": "During damage calculation, if your opponent's monster attacks (Quick Effect): You can discard this card; you take no battle damage from that battle.",
+    "atk": 300,
+    "def": 200,
+    "level": 1,
+    "attribute": "DARK",
+    "race": "Fiend"
+  },
+  {
+    "name": "Kuriboh",
+    "id": "40640057",
+    "type": "Effect Monster",
+    "desc": "During damage calculation, if your opponent's monster attacks (Quick Effect): You can discard this card; you take no battle damage from that battle.",
+    "atk": 300,
+    "def": 200,
+    "level": 1,
+    "attribute": "DARK",
+    "race": "Fiend"
+  },
+  {
+    "name": "Silver Fang",
+    "id": "90357090",
+    "type": "Normal Monster",
+    "desc": "A snow wolf that's beautiful to the eye, but absolutely vicious in battle.",
+    "atk": 1200,
+    "def": 800,
+    "level": 3,
+    "attribute": "EARTH",
+    "race": "Beast"
   },
   {
     "name": "Silver Fang",

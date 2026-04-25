@@ -8,7 +8,7 @@ Card text:
     your opponent controls.
 
 Card type: Normal Spell
-    Normal Spells can only be activated during your own Main Phase 1 or 2.
+    Normal Spells can only be activated during your own Main Phase.
     They resolve immediately and are sent to the GY after resolution.
 
 Hook used: on_spell_activate
@@ -36,8 +36,8 @@ Template for future Normal Spell effects
 5.  register(CARD_ID, "on_spell_activate", _your_handler) at the bottom.
 
 Phase strings used by Main.py  (defined in PHASES constant):
-    "Draw", "Standby", "Main 1", "Battle", "Main 2", "End"
-    Note the spaces — "Main 1" not "Main1".
+    "Draw", "Main", "Battle", "End"
+    Note the spaces — "Main" not "Main1".
 """
 
 from __future__ import annotations
@@ -54,9 +54,9 @@ CARD_NAME = "Dark Magic Attack"
 
 _REQUIRED_MONSTER = "Dark Magician"
 
-# Main.py phase strings — note the spaces ("Main 1" not "Main1").
+# Main.py phase strings — must match PHASES in Main.py.
 # These must exactly match the strings in Main.py's PHASES list.
-_VALID_PHASES = {"Main 1", "Main 2"}
+_VALID_PHASES = {"Main"}
 
 
 # ── Phase guard (reusable by all spell/trap effects) ──────────────────────────
@@ -69,7 +69,7 @@ def _require_phase(context: dict, *allowed: str) -> None:
     Fails open (allows) when game_state is absent — safe for tests/sandbox.
 
     Usage:
-        _require_phase(context, "Main 1", "Main 2")
+        _require_phase(context, *_VALID_PHASES)
     """
     game_state = context.get("game_state", {})
     if not game_state:
@@ -164,7 +164,7 @@ def _on_spell_activate(card, context: dict) -> None:
 
     Steps
     -----
-    1. Phase guard — Main Phase 1 or 2 only.
+    1. Phase guard — Main Phase only.
     2. Condition — controller must have "Dark Magician" face-up on field.
     3. Collect all live Spell/Trap Cards from the opponent's field.
     4. Write into context["send_to_gy"] for apply_result to process.
